@@ -1,0 +1,140 @@
+---
+title: "311_calls"
+format: html
+editor: visual
+---
+
+
+
+
+```{r}
+library(tidyverse)
+library(janitor)
+df <- read.csv("data/employeeearningscy18full.csv")
+df<-clean_names(df)
+
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+glimpse(df)
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+How many uniques? How many unique departments are in this payroll dataset?
+```{r}
+df |> count(department_name) |> 
+  nrow()
+
+```
+
+What's the max per group? Who had the highest total earnings in the Boston Police Department and in the Parks Department?
+
+```{r}
+ df |> 
+  filter(department_name %in% c("Boston Police Department", "Parks Department")) |> 
+group_by(department_name) |> 
+  slice_max(`total_earnings`, n = 1) |>
+  select(name, department_name, `total_earnings`)
+```
+
+Out of all the categories of pay (REGULAR, RETRO, OTHER, OVERTIME, INJURED, DETAIL, etc), how much is the city paying in overtime?
+```{r}
+df |> 
+  summarise(total_overtime = sum(o, vertime, na.rm = TRUE))
+
+
+  
+```
+
+
+What's the average? Salary (REGULAR)?
+
+```{r}
+df |> 
+  mutate(regular = as.numeric(regular)) |> 
+  summarise(avg_regular_salary =
+              mean(regular, na.rm = TRUE))
+
+  
+  
+```
+
+
+Which five departments have the most employees?
+```{r}
+
+df |> 
+  count(department_name, sort = TRUE) |> 
+  slice_head(n = 5)
+```
+
+
+What's the max total pay in the BPS Transportation Department?
+```{r}
+df |> 
+  filter(department_name == "BPS Transportation") |> 
+  slice_max(total_earnings,
+            n = 1,
+            with_ties = FALSE) |> 
+  select(name, total_earnings)
+```
+
+
+What's the average pay for all Cab Monitors in the BPS Transportation Department?
+```{r}
+df |> 
+  filter(department_name == "BPS Transportation") |> 
+  filter(str_detect(str_to_lower(title), "cab monitor")) |> 
+  summarise(
+    avg_total_pay =
+      mean(total_earnings, na.rm = TRUE),
+    employees = n()
+  )
+```
+
+
+What's the difference in between average overtime by department? Between the fire department and boston police?
+```{r}
+df |> 
+  mutate(overtime = as.numeric(gsub(",", "", overtime))) |> 
+  filter(department_name %in% c("Boston Fire Department", "Boston Police Department")) |> 
+  group_by(department_name) |> 
+  summarise(avg_overtime = mean(overtime, na.rm = TRUE), .groups = "drop") |> 
+  pivot_wider(names_from = department_name, values_from = avg_overtime) |> 
+  mutate(difference = `Boston Fire Department` - `Boston Police Department`)
+```
+
+How much do employees with the last name "O'Malley" make in Boston together?
+```{r}
+df |> 
+  filter(str_detect(name, "O'Malley")) |> 
+  summarise(
+    total_omalley_earnings = sum(total_earnings, na.rm = TRUE),
+    employees = n()
+  )
+```
+
+
+The example data set is for Boston payroll in 2018. If in 2020, Boston Police Department's total earnings was $512,399,200, what is the percent change from their total earnings in 2018?
+
+```{r}
+bpd_2018 <- df |> 
+  filter(department_name ==
+           "Boston Police Department") |> 
+  summarise(total =
+              sum(total_earnings,
+                  na.rm = TRUE)) |> 
+  pull(total)
+
+bpd_2020 <- 512399200
+
+percent_change <-
+  ((bpd_2020 - bpd_2018) / bpd_2018) * 100
+
+percent_change
+```
+

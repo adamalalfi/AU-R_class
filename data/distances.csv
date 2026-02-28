@@ -1,0 +1,60 @@
+from_place,to_place,distance
+SR874 South (at Turnpike),HOMESTEAD SB,8.4
+SR878 East (87th Ave),SR878 East (at SR826),1.2
+Golden Glades,Cypress Creek ORT North,19.8
+Okeechobee,Bird Road SB ORT Lite,8.7
+SR924 East (57th AVE),SR924 East (42nd Ave),1.6
+SR874 North (at Turnpike),SR874 North (Killian),1.4
+Cypress Creek ORT South,Golden Glades,19.8
+I-95 NW54th NB HOT Lanes,Golden Glades,7.7
+Cypress Creek ORT North,Sawgrass Deerfield,8.4
+HOMESTEAD NB,SR874 North (at Turnpike),8.4
+Commercial - SunPass Only Ramp,Miramar Ramp to NW27,16.5
+SR874 South (at SR826),SR874 South (Killian),3.3
+Sawgrass Deerfield,Cypress Creek ORT South,7.3
+SR924 West (42nd Ave),SR924 West (57th AVE),1.6
+Cypress Creek ORT South,Miramar,17.1
+SR878 West (at SR826),SR878 West (87th Ave),1.2
+SR874 North (Killian),SR874 North (at SR826),3.3
+Okeechobee,Miramar,15.7
+Golden Glades,I-95 NW144th SB HOT Lanes,2.1
+Bird Road SB ORT Lite,HOMESTEAD SB,12.6
+HOMESTEAD NB,Bird Road NB ORT Lite,12.3
+SR874 South (Killian),SR874 South (at Turnpike),1.3
+Sunrise Blvd,Golden Glades,15.2
+SR878 West (87th Ave),SR874 South (Killian),1.9
+Miramar,Okeechobee,15.3
+Bird Road NB ORT Lite,Okeechobee,8.6
+SR874 North (Killian),SR878 East (87th Ave),1.8
+HOMESTEAD NB,Coral Reef East/West,5.5
+US 41- 8th St SE/SW,Okeechobee,6.1
+Golden Glades,Sunrise Blvd,14.8
+Hollywood Blvd,Commercial Blvd,13.6
+Commercial - SunPass Only Ramp,Griffin Rd East/West,9.4
+Commercial Blvd,Miramar,16.5
+Kendall Drive East/West,HOMESTEAD SB,9.8
+Griffin Rd East/West,Cypress Creek ORT North,10.1
+Commercial - SunPass Only Ramp,Hollywood Blvd,14.2
+Miramar,Cypress Creek ORT North,17.2
+Lantana,Cypress Creek ORT South,25
+SR878 West (87th Ave),SR878 West (at SR826),1.2
+Cypress Creek ORT North,Lantana,25
+Cypress Creek ORT South,Miramar Ramp to NW27,17.1
+HOMESTEAD NB,Kendall Drive East/West,9.8
+Commercial - SunPass Only Ramp,Dolphin Center,16.6
+Coral Reef East/West,HOMESTEAD SB,5.5
+Miramar,Commercial Blvd,16.5
+Griffin Rd East/West,Commercial Blvd,9.1
+Hollywood Blvd,Cypress Creek ORT North,14.6
+HOMESTEAD NB,SW 120th St East/West,7.9
+Okeechobee,NW 27th Av North/South,10.7
+Sawgrass Deerfield,Sunrise Mainline SB ORT Lite,18.4
+Lantana,Sawgrass Deerfield,17.9
+SW 120th St East/West,HOMESTEAD SB,7.9
+Sunrise Mainline NB ORT Lite,Sawgrass 441 A/B/C Ramps,14.7
+County Line Road,Cypress Creek ORT North,17.2
+Dolphin Center,Commercial Blvd,17.1
+Sawgrass 441 A/B/C Ramps,Sunrise Mainline SB ORT Lite,14.7
+NW 27th Av North/South,Okeechobee,10.7
+Commercial Blvd,Griffin Rd East/West,9.4
+Cypress Creek ORT South,Hollywood Blvd,14.9

@@ -1,0 +1,10 @@
+id,name,date,manner_of_death,armed,age,gender,race,city,state,signs_of_mental_illness,threat_level,flee,body_camera
+282,Bobby Gross,3/12/2015,shot,unarmed,35,M,B,Washington,DC,TRUE,other,Not fleeing,FALSE
+955,Marquesha McMillan,10/26/2015,shot,gun,21,F,B,Washington,DC,FALSE,attack,Not fleeing,FALSE
+975,James Covington,11/2/2015,shot,gun,62,M,B,Washington,DC,FALSE,attack,Car,FALSE
+1022,Darick Napper,11/19/2015,shot,knife,34,M,B,Washington,DC,FALSE,other,Not fleeing,FALSE
+1219,Peter John,2/1/2016,shot,toy weapon,36,M,B,Washington,DC,FALSE,attack,Foot,FALSE
+1666,Sherman Evans,6/27/2016,shot,toy weapon,63,M,B,Washington,DC,TRUE,attack,Not fleeing,TRUE
+1683,Sidney Washington,7/4/2016,shot,gun,21,M,B,Washington,DC,FALSE,attack,Not fleeing,FALSE
+1875,Terrence Sterling,9/11/2016,shot,motorcycle,31,M,B,Washington,DC,FALSE,attack,Other,FALSE
+2159,Gerald Hall,12/25/2016,shot,knife,29,M,B,Washington,DC,FALSE,other,Not fleeing,TRUE

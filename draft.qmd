@@ -1,0 +1,320 @@
+---
+title: "draft"
+format: html
+editor: visual
+---
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(janitor)
+library(lubridate)
+arrests <- read_csv("data/2024_dc_arrests.csv") |> clean_names()
+demographics <- read_csv("data/ACS_5-Year_Demographic_Characteristics_DC_Ward.csv") |> clean_names()
+social <- read_csv("data/ACS_5-Year_Social_Characteristics_DC_Ward.csv") |> clean_names()
+camera_locs <- read_csv("data/Automated_Traffic_Enforcement.csv") |> clean_names()
+camera_violations <- read_csv("data/Automated_Safety_Cameras_Violation_Count_By_Month.csv") |> clean_names()
+# racial distribution
+ward_pop <- demographics |> 
+  mutate(ward_num = str_extract(namelsad, "\\d")) |> 
+  select(ward_num, 
+         total_pop = dp05_0001e, 
+         black_pop = dp05_0038e,
+         white_pop = dp05_0037e)
+#education
+ward_social <- social |> 
+  mutate(ward_num = str_extract(namelsad, "\\d")) |> 
+  select(ward_num, 
+         total_households = dp02_0001e,
+         pop_25_plus = dp02_0067e, 
+         bachelors_plus = dp02_0068e)
+
+# creating a table for each ward with total arrests and numbers for each racein this one I have to map areests psa to wards so it can match each ward in the district
+ward_arrest_stats <- arrests |> 
+  mutate(psa = as.character(offense_location_psa)) |> 
+  mutate(ward_num = case_when(
+    psa %in% c("301", "302", "303", "304", "305", "408") ~ "1",
+    psa %in% c("101", "102", "207", "208", "209", "306", "307") ~ "2",
+    psa %in% c("201", "202", "203", "204", "205", "206") ~ "3",
+    psa %in% c("401", "402", "403", "404", "405", "406", "407", "409") ~ "4",
+    psa %in% c("501", "502", "503", "504", "505", "506", "507") ~ "5",
+    psa %in% c("103", "104", "105", "106", "107", "108") ~ "6",
+    psa %in% c("601", "602", "603", "604", "605", "606", "607", "608") ~ "7",
+    psa %in% c("701", "702", "703", "704", "705", "706", "707", "708") ~ "8",
+    TRUE ~ NA_character_
+  )) |> 
+  group_by(ward_num) |> 
+summarise(
+    total_arrests = n(),
+    black_arrests = sum(defendant_race == "BLACK", na.rm = TRUE),
+    white_arrests = sum(defendant_race == "WHITE", na.rm = TRUE),
+    total_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated"), na.rm = TRUE), 
+    black_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated") & defendant_race == "BLACK", na.rm = TRUE), 
+    white_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated") & defendant_race == "WHITE", na.rm = TRUE)
+  )
+#Traffic cameras violations
+total_violations <- camera_violations |> 
+  group_by(enforcement_space_code) |> 
+  summarise(total_violations = sum(num_violations, na.rm = TRUE))
+#Traffic cameras by ward 
+ward_camera_stats <- camera_locs |> 
+  mutate(ward_num = as.character(as.integer(ward))) |> 
+  left_join(total_violations, by = "enforcement_space_code") |> 
+  group_by(ward_num) |> 
+  summarise(
+    camera_count = n(),
+    speed_camera_count = sum(enforcement_type == "Speed", na.rm = TRUE),
+    total_camera_violations = sum(total_violations, na.rm = TRUE)
+  ) |> 
+  filter(ward_num != "0")
+#now I will join the data and calculate the per capita rates
+joined_df <- ward_arrest_stats |> 
+  drop_na(ward_num) |> 
+  inner_join(ward_pop, by = "ward_num") |> 
+  left_join(ward_camera_stats, by = "ward_num") |> 
+  mutate(
+    # Arrests per 1,000 residents of each race (per capita)
+    black_per_capita = (black_arrests / black_pop) * 1000,
+    white_per_capita = (white_arrests / white_pop) * 1000,
+    #Cameras per 10,000 residents
+    cameras_per_10k = (camera_count / total_pop) * 10000,
+    # Percentages for dataviz
+  pct_black_pop = (black_pop / total_pop) * 100,
+    pct_white_pop = (white_pop / total_pop) * 100,
+    pct_black_arrests = (black_arrests / total_arrests) * 100,
+    pct_white_arrests = (white_arrests / total_arrests) * 100,
+    pct_black_traffic_arrests = (black_traffic_arrests / total_traffic_arrests) * 100,
+    pct_white_traffic_arrests = (white_traffic_arrests / total_traffic_arrests) * 100
+
+  )
+
+```
+
+\
+How many times a black resident is likely to be arrested compered to a white resident? in each ward
+
+```{r}
+joined_df |> 
+  mutate(disparity_ratio = black_per_capita / white_per_capita) |> 
+  select(ward_num, black_per_capita, white_per_capita, disparity_ratio) |> 
+  arrange(desc(disparity_ratio))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+joined_df |> 
+  select(ward_num, pct_black_pop, pct_black_arrests, pct_white_pop, pct_white_arrests) |> 
+  pivot_longer(cols = starts_with("pct"), names_to = "metric", values_to = "value") |> 
+  mutate(ward_num = factor(ward_num, levels = as.character(1:8))) |> 
+  ggplot(aes(x = ward_num, y = value, fill = metric)) +
+  geom_col(position = "dodge") +
+  # data labels
+  geom_text(aes(label = paste0(round(value, 0), "%")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, size = 2) +
+  # assigning colors (I thought these colors will be eaasy to distonguish but let me know if they are too much)
+  scale_fill_manual(values = c(
+    "pct_black_pop" = "green",      
+    "pct_black_arrests" = "red",    
+    "pct_white_pop" = "grey",       
+    "pct_white_arrests" = "black"), 
+    labels = c("Black Residents", "Black Arrests", "White Residents", "White Arrests")
+  ) +
+  theme_minimal() +
+  # editing the graph by removing background abd y axis
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "top"
+  ) +
+  labs(title = "Residents vs. Arrests: Racial Representation by Ward",
+       x = "Ward", fill = "",
+       caption = "Source: Metropolitan Police Department (2024 Arrest Data) & U.S. Census Bureau (ACS 5-Year)")
+
+```
+
+What are the wards with majority black population?
+
+```{r}
+joined_df |> 
+  filter(ward_num %in% c("7", "8")) |> 
+  select(ward_num, pct_black_pop, total_arrests, camera_count)
+```
+
+what is the distribution of traffic cameras in each ward?
+
+```{r}
+ward_camera_stats |> 
+  select(ward_num, camera_count, total_camera_violations) |> 
+  arrange(desc(camera_count))
+```
+
+Traffic arrests by race for each ward
+
+```{r}
+joined_df |> 
+  select(ward_num, 
+         total_traffic_arrests, 
+         pct_black_traffic_arrests, pct_black_pop,
+         pct_white_traffic_arrests, pct_white_pop) |> 
+  arrange(desc(pct_black_traffic_arrests))
+
+```
+
+are there ore traffic cameras in black majority neighborhoods?
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot(joined_df, aes(x = reorder(paste("Ward", ward_num), cameras_per_10k), y = cameras_per_10k, fill = pct_black_pop)) +
+  geom_col() +
+  coord_flip() +
+  geom_text(aes(label = round(cameras_per_10k, )), hjust = -0.2, size = 2.3) +
+  scale_fill_gradient(low = "lightgrey", high = "darkblue") +
+  theme_classic() +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.line.y = element_blank()
+  ) +
+  labs(title = "Traffic Camera Density by Ward",
+       subtitle = "Number of cameras per 10,000 residents.",
+       x = "", y = "Cameras per 10k Residents", fill = "% Black Population",
+       caption = "Source: Open Data DC (Automated Traffic Enforcement)")
+```
+
+what is the distribution of traffic camera in in ward 3 and ward 8?
+
+```{r}
+
+camera_locs |> 
+  mutate(ward_num = as.character(as.integer(ward))) |> 
+  filter(ward_num %in% c("3", "8")) |> 
+  group_by(ward_num, enforcement_type) |> 
+  summarise(count = n(), .groups = "drop") |> 
+  pivot_wider(names_from = ward_num, values_from = count, values_fill = 0)
+```
+
+data viz\
+
+```{r}
+#| message: false
+#| warning: false
+
+library(sf)
+library(tidyverse)
+
+wards <- st_read("data/dc_wards.geojson", quiet = TRUE)
+target_clusters <- st_read("data/Neighborhood_Clusters.geojson", quiet = TRUE)
+
+# Preparing the camera data
+target_cameras <- camera_locs |>
+  clean_names() |>
+  rename(
+    longitude = any_of(c("x", "longitude", "lon", "xcoord", "long")),
+    latitude  = any_of(c("y", "latitude", "lat", "ycoord"))
+  ) |>
+  filter(!is.na(longitude) & !is.na(latitude)) |>
+  mutate(ward_num = as.numeric(ward)) |>
+  filter(ward_num %in% c(3, 8)) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+# Creating the final map object
+final_map <- ggplot() +
+  # coloring  the bacjground for the map
+  geom_sf(data = wards, fill = "grey", color = "grey8", linewidth = 0.1, alpha = 0.2) +
+  
+  # formating and coloring ward 3 and 8
+  geom_sf(data = filter(wards, WARD %in% c(3, 8)), fill = "white", color = "black", linewidth = 0.5) +
+  
+  #filling the neighoerhood boundries
+  geom_sf(data = target_clusters, fill = NA, color = "black", linewidth = 0.1) +
+  
+  # adding dots to represent cameras
+  geom_sf(data = target_cameras, aes(color = enforcement_type), size = 0.8, alpha = 0.5) +
+  
+  # coloring the dots for each camera
+  scale_color_manual(values = c(
+    "Speed" = "#EA4335", 
+    "Red Light" = "#FBBC05", 
+    "Stop Sign" = "#34A853", 
+    "Truck Restriction" = "#4285F4"
+  ), name = "Camera Type") +
+  
+  # formating the theme and layout for the legend
+  theme_void() +
+  theme(
+    legend.position = "right",
+    legend.direction = "vertical",
+    legend.title = element_text(face = "bold", size = 10),
+    legend.text = element_text(size = 9),
+    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(20, 20, 20, 20)
+  ) +
+  labs(
+    title = "TRAFFIC ENFORCEMENT DISTRIBUTION ",
+    subtitle = "Ward 3 and Ward 8 enforcment cameras Locations",
+    caption = "Source: Open Data DC & Metropolitan Police Department"
+  )
+
+final_map
+
+```
+
+Camera fines numbers in 2024 for ward 8 and 3
+
+```{r}
+#| message: false
+#| warning: false
+
+# Calculate city averages for TRAFFIC enforcement only
+avg_camera_tickets <- mean(joined_df$total_camera_violations, na.rm = TRUE)
+avg_traffic_arrests <- mean(joined_df$total_traffic_arrests, na.rm = TRUE)
+
+joined_df |> 
+  filter(ward_num %in% c("3","5","8")) |> 
+  mutate(
+    camera_burden = total_camera_violations / avg_camera_tickets,
+    traffic_arrest_burden = total_traffic_arrests / avg_traffic_arrests,
+    Location = paste("Ward", ward_num)
+  ) |> 
+  select(Location, camera_burden, traffic_arrest_burden) |> 
+  pivot_longer(
+    cols = -Location,
+    names_to = "Type",
+    values_to = "Score"
+  ) |> 
+  ggplot(aes(x = Type, y = Score, fill = Location)) +
+  geom_col(position = "dodge") +
+  
+  # City average reference
+  geom_hline(yintercept = 1,
+             linetype = "dashed",
+             color = "red") +
+  
+  scale_fill_manual(values = c(
+    "Ward 3" = "lightgrey",
+    "Ward 5" = "#6BAED6",
+    "Ward 8" = "darkblue"
+  )) +
+  
+  scale_x_discrete(labels = c(
+    camera_burden = "Camera Violations",
+    traffic_arrest_burden = "Traffic Arrests"
+  )) +
+  
+  theme_minimal() +
+  labs(
+    title = "Traffic Enforcement Burden by Ward (2024)",
+    subtitle = "Comparison of police traffic arrests and automated camera tickets",
+    y = "Times Higher Than D.C. Average",
+    x = "",
+    fill = ""
+  )
+```
