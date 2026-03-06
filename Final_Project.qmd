@@ -13,15 +13,15 @@ execute:
 editor: visual
 ---
 
-Memo Brief
+# Memo brief
 
 this memo explore two main ideas about the automated camera enforcement in Washington, D.C.
 
-1- Revenue v. safety: how much money the city actually billed in traffic enforcement and are they perioratizing safety or revenue.
+1- Revenue v. safety: how much money the city actually billed in traffic enforcement and are they prioritizing safety or revenue.
 
-2- Racial distribution: are wards with majority black population more likely to experience more automated enforcement percapita.
+2- Racial distribution: are wards with majority black population more likely to experience more automated enforcement.
 
-Data sources:
+## Data sources:
 
 -   MPD arrest data for 2024
 
