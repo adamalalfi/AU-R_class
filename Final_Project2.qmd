@@ -1,7 +1,6 @@
 ---
 title: " Traffic enfoecement camera in Washington, D.C. distribution and revenue"
 format:
-  html:
   revealjs: 
     toc: true
     toc-depth: 2
