@@ -13,7 +13,7 @@ execute:
 editor: visual
 ---
 
-Memo Brief
+# Memo Brief
 
 this memo explore two main ideas about the automated camera enforcement in Washington, D.C.
 
@@ -21,7 +21,7 @@ this memo explore two main ideas about the automated camera enforcement in Washi
 
 2- Racial distribution: are wards with majority black population more likely to experience more automated enforcement percapita.
 
-Data sources:
+## Data sources:
 
 -   MPD arrest data for 2024
 
