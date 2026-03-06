@@ -1,0 +1,455 @@
+---
+title: " Traffic enfoecement camera in Washington, D.C. distribution and revenue"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-summary: "Show the code"
+    code-tools: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+# Memo brief
+
+this memo explore two main ideas about the automated camera enforcement in Washington, D.C.
+
+1- Revenue v. safety: how much money the city actually billed in traffic enforcement and are they prioritizing safety or revenue.
+
+2- Racial distribution: are wards with majority black population more likely to experience more automated enforcement.
+
+## Data sources:
+
+-   MPD arrest data for 2024
+
+-   DC automated traffic enforcement locations
+
+-   DC automated camera violations by month (2024)
+
+-   ACS 5-year ward demographics
+
+-   2024 moving violations
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(sf)
+library(ggrepel)
+arrests <- read_csv("data/2024_dc_arrests.csv") |> clean_names()
+demographics <- read_csv("data/ACS_5-Year_Demographic_Characteristics_DC_Ward.csv") |> clean_names()
+social <- read_csv("data/ACS_5-Year_Social_Characteristics_DC_Ward.csv") |> clean_names()
+camera_locs <- read_csv("data/Automated_Traffic_Enforcement.csv") |> clean_names()
+camera_violations <- read_csv("data/Automated_Safety_Cameras_Violation_Count_By_Month.csv") |> clean_names()
+# racial distribution
+ward_pop <- demographics |> 
+  mutate(ward_num = str_extract(namelsad, "\\d")) |> 
+  select(ward_num, 
+         total_pop = dp05_0001e, 
+         black_pop = dp05_0038e,
+         white_pop = dp05_0037e)
+#education
+ward_social <- social |> 
+  mutate(ward_num = str_extract(namelsad, "\\d")) |> 
+  select(ward_num, 
+         total_households = dp02_0001e,
+         pop_25_plus = dp02_0067e, 
+         bachelors_plus = dp02_0068e)
+
+# creating a table for each ward with total arrests and numbers for each racein this one I have to map areests psa to wards so it can match each ward in the district
+ward_arrest_stats <- arrests |> 
+  mutate(psa = as.character(offense_location_psa)) |> 
+  mutate(ward_num = case_when(
+    psa %in% c("301", "302", "303", "304", "305", "408") ~ "1",
+    psa %in% c("101", "102", "207", "208", "209", "306", "307") ~ "2",
+    psa %in% c("201", "202", "203", "204", "205", "206") ~ "3",
+    psa %in% c("401", "402", "403", "404", "405", "406", "407", "409") ~ "4",
+    psa %in% c("501", "502", "503", "504", "505", "506", "507") ~ "5",
+    psa %in% c("103", "104", "105", "106", "107", "108") ~ "6",
+    psa %in% c("601", "602", "603", "604", "605", "606", "607", "608") ~ "7",
+    psa %in% c("701", "702", "703", "704", "705", "706", "707", "708") ~ "8",
+    TRUE ~ NA_character_
+  )) |> 
+  group_by(ward_num) |> 
+summarise(
+    total_arrests = n(),
+    black_arrests = sum(defendant_race == "BLACK", na.rm = TRUE),
+    white_arrests = sum(defendant_race == "WHITE", na.rm = TRUE),
+    total_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated"), na.rm = TRUE), 
+    black_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated") & defendant_race == "BLACK", na.rm = TRUE), 
+    white_traffic_arrests = sum(arrest_category %in% c("Traffic Violations", "Driving/Boating While Intoxicated") & defendant_race == "WHITE", na.rm = TRUE)
+  )
+#Traffic cameras violations
+total_violations <- camera_violations |> 
+  group_by(enforcement_space_code) |> 
+  summarise(total_violations = sum(num_violations, na.rm = TRUE))
+#Traffic cameras by ward 
+ward_camera_stats <- camera_locs |> 
+  mutate(ward_num = as.character(as.integer(ward))) |> 
+  left_join(total_violations, by = "enforcement_space_code") |> 
+  group_by(ward_num) |> 
+  summarise(
+    camera_count = n(),
+    speed_camera_count = sum(enforcement_type == "Speed", na.rm = TRUE),
+    total_camera_violations = sum(total_violations, na.rm = TRUE)
+  ) |> 
+  filter(ward_num != "0")
+wards <- st_read("data/Wards_dc.geojson", quiet = TRUE) |>
+  mutate(WARD = as.numeric(WARD)) |>
+  st_transform(4326)
+#now I will join the data and calculate the per capita rates
+joined_df <- ward_arrest_stats |> 
+  drop_na(ward_num) |> 
+  inner_join(ward_pop, by = "ward_num") |> 
+  left_join(ward_camera_stats, by = "ward_num") |> 
+  mutate(
+    # Arrests per 1,000 residents of each race (per capita)
+    black_per_capita = (black_arrests / black_pop) * 1000,
+    white_per_capita = (white_arrests / white_pop) * 1000,
+    #Cameras per 10,000 residents
+    cameras_per_10k = (camera_count / total_pop) * 10000,
+    # Percentages for dataviz
+  pct_black_pop = (black_pop / total_pop) * 100,
+    pct_white_pop = (white_pop / total_pop) * 100,
+    pct_black_arrests = (black_arrests / total_arrests) * 100,
+    pct_white_arrests = (white_arrests / total_arrests) * 100,
+    pct_black_traffic_arrests = (black_traffic_arrests / total_traffic_arrests) * 100,
+    pct_white_traffic_arrests = (white_traffic_arrests / total_traffic_arrests) * 100
+
+  )
+# Loading 2024 monthly revenue
+jan <- read_csv("data/Moving_Violations_Issued_in_January_2024.csv") |> clean_names()
+feb <- read_csv("data/Moving_Violations_Issued_in_February_2024.csv") |> clean_names()
+mar <- read_csv("data/Moving_Violations_Issued_in_March_2024.csv") |> clean_names()
+apr <- read_csv("data/Moving_Violations_Issued_in_April_2024.csv") |> clean_names()
+may <- read_csv("data/Moving_Violations_Issued_in_May_2024.csv") |> clean_names()
+jun <- read_csv("data/Moving_Violations_Issued_in_June_2024.csv") |> clean_names()
+jul <- read_csv("data/Moving_Violations_Issued_in_July_2024.csv") |> clean_names()
+aug <- read_csv("data/Moving_Violations_Issued_in_August_2024.csv") |> clean_names()
+sep <- read_csv("data/Moving_Violations_Issued_in_September_2024.csv") |> clean_names()
+oct <- read_csv("data/Moving_Violations_Issued_in_October_2024.csv") |> clean_names()
+nov <- read_csv("data/Moving_Violations_Issued_in_November_2024.csv") |> clean_names()
+dec <- read_csv("data/Moving_Violations_Issued_in_December_2024.csv") |> clean_names()
+#combine all 12 in 1 table
+
+tickets_revenue_2024 <- bind_rows(
+  jan, feb, mar, apr, may, jun,
+  jul, aug, sep, oct, nov, dec
+)
+
+```
+
+# Background
+
+## Physical traffic violation arrests vs. automated enforcement arrests
+
+this section compares the physical arrests vs. automated enforcement pattern for each ward
+
+```{r}
+#| echo: false
+#| warning: false
+joined_df |> 
+  select(ward_num, pct_black_pop, pct_black_arrests, pct_white_pop, pct_white_arrests) |> 
+  pivot_longer(cols = starts_with("pct"), names_to = "metric", values_to = "value") |> 
+  mutate(ward_num = factor(ward_num, levels = as.character(1:8))) |> 
+  ggplot(aes(x = ward_num, y = value, fill = metric)) +
+  geom_col(position = "dodge") +
+  # data labels
+  geom_text(aes(label = paste0(round(value, 0), "%")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, size = 2) +
+  # assigning colors (I thought these colors will be eaasy to distonguish but let me know if they are too much)
+  scale_fill_manual(values = c(
+    "pct_black_pop" = "green",      
+    "pct_black_arrests" = "red",    
+    "pct_white_pop" = "grey",       
+    "pct_white_arrests" = "black"), 
+    labels = c("Black Residents", "Black Arrests", "White Residents", "White Arrests")
+  ) +
+  theme_minimal() +
+  # editing the graph by removing background abd y axis
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "top"
+  ) +
+  labs(title = "Residents vs. Arrests: Racial Representation by Ward",
+       x = "Ward", fill = "",
+       caption = "Source: Metropolitan Police Department (2024 Arrest Data) & U.S. Census Bureau (ACS 5-Year)")
+```
+
+For more background context the table below shows how many time more likely a black resident is arrested then a white resident in each ward.
+
+```{r}
+joined_df |> 
+  mutate(disparity_ratio = black_per_capita / white_per_capita) |> 
+  select(ward_num, black_per_capita, white_per_capita, disparity_ratio) |> 
+  arrange(desc(disparity_ratio))
+```
+
+# Camera distribution across wards
+
+After exploring the physical traffic arrests, the next step is to explore where the automated enforcement cameras are distributed around the district.
+
+By counting the number of cameras in each ward as well as the volume and the revenue of the traffic enforcement we can get a clear understanding whether certain neighborhoods are experiencing more traffic enforcement.
+
+## Traffic cameras by ward
+
+```{r}
+ward_camera_stats |> 
+  select(ward_num, camera_count, total_camera_violations) |> 
+  arrange(desc(camera_count))
+
+```
+
+The Table above shows that ward 5, 7 and 8 have the highest number of traffic camera enforcement as well as the highest number of violations.
+
+## Enforcement camera density in each ward
+
+this chart compares the camera density in each ward using camera per 10,000 resident.
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot(joined_df, aes(x = reorder(paste("Ward", ward_num), cameras_per_10k), y = cameras_per_10k, fill = pct_black_pop)) +
+  geom_col() +
+  coord_flip() +
+  geom_text(aes(label = round(cameras_per_10k, )), hjust = -0.2, size = 2.3) +
+  scale_fill_gradient(low = "lightgrey", high = "darkblue") +
+  theme_classic() +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.line.y = element_blank()
+  ) +
+  labs(title = "Traffic Camera Density by Ward",
+       subtitle = "Number of cameras per 10,000 residents.",
+       x = "", y = "Cameras per 10k Residents", fill = "% Black Population",
+       caption = "Source: Open Data DC (Automated Traffic Enforcement)")
+```
+
+## Traffic violation volume by neighborhood
+
+```{r}
+#| message: false
+#| warning: false
+
+library(sf)
+library(tidyverse)
+library(lubridate)
+
+# Violation data for 2024
+top_locations <- camera_violations |> 
+  mutate(date = ymd_hms(year_month)) |> 
+  filter(year(date) %in% c(2024)) |> 
+  group_by(enforcement_space_code) |> 
+  summarise(total_violations = sum(num_violations, na.rm = TRUE))
+
+# perparing camera coordinates to add them to the map
+camera_locs_clean <- camera_locs |>
+  rename_with(tolower) |>
+  rename(
+    longitude = any_of(c("longitude","long","x","lon")),
+    latitude  = any_of(c("latitude","lat","y"))
+  )
+
+# converting camera location to special points
+camera_dots_sf <- camera_locs_clean |>
+  drop_na(longitude, latitude) |> 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 3857) |>
+  st_transform(4326)
+
+# Loading DC neighborhood map
+neighborhood_sf <- st_read("data/Neighborhood_dc.geojson", quiet = TRUE) |> 
+  st_transform(4326)
+neighborhood_sf <- neighborhood_sf |> 
+  rename_with(tolower) |> 
+  rename(neigh_name = any_of(c("name")))
+
+# linkimg violation total and cam locations
+camera_points_with_violations <- camera_dots_sf |> 
+  left_join(top_locations, by = "enforcement_space_code")
+camera_neighborhood <- st_join(camera_points_with_violations, neighborhood_sf)
+
+# calculating total violation in each neighborhood
+neighborhood_revenue <- camera_neighborhood |> 
+  filter(!is.na(neigh_name)) |> 
+  st_drop_geometry() |> 
+  group_by(neigh_name) |> 
+  summarise(
+    total_revenue_vol = sum(total_violations, na.rm = TRUE)
+  )
+map_data_neighborhood <- neighborhood_sf |> 
+  left_join(neighborhood_revenue, by = "neigh_name")
+
+# drawing the map
+ggplot() +
+  geom_sf(data = map_data_neighborhood,
+          aes(fill = total_revenue_vol),
+          color = "white",
+          linewidth = 0.2) +
+  geom_sf(data = camera_dots_sf,
+          color = "orange",
+          size = 0.4,
+          alpha = 0.4) +
+  
+  # shading
+  scale_fill_viridis_c(
+    option = "mako",
+    direction = -1,
+    name = "Ticket Volume",
+    labels = scales::comma,
+    na.value = "grey90"
+  ) +
+  
+  theme_void() +
+    labs(
+    title = "Ticket volume by neighberhood",
+    caption = "Source: Open Data DC"
+  )
+```
+
+## Traffic enforcement violation and Black population
+
+This scatter plot compares the number of tautomated traffic enforcement violations with the percentage of black population in each ward using the number of cameras per 10,000 resident.
+
+```{r}
+#| message: false
+#| warning: false
+
+ggplot(joined_df, aes(x = pct_black_pop, y = cameras_per_10k)) +
+  
+  # formating the point size
+  geom_point(aes(size = total_camera_violations),
+             color = "darkblue",
+             alpha = 0.8) +
+  
+  # labeling each ward
+  geom_text(aes(label = paste("Ward", ward_num)),
+            nudge_y = 0.1,
+            size = 3) +
+  
+  # adding the line to emphasize relation ship 
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  
+  theme_minimal() +
+  
+  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
+  
+  labs(
+    title = "Traffic CamerasViolations vs Black Population by Ward",
+    subtitle = "Point size represents total automated traffic violations",
+    x = "% Black Residents",
+    y = "Cameras per 10,000 residents",
+    size = "Total Camera Violations",
+    caption = "Source: Open Data DC & U.S. Census Bureau"
+  )
+```
+
+# Revenue generated by traffic enforcement
+
+This section explores the amount of automated enforcement fines in the district and how much money was actually paid
+
+## Total Revenue
+
+The total revenue that the district should get from traffic enforcement is \$341,264,692
+
+```{r}
+tickets_revenue_2024 |> 
+  summarise(
+    total_fines = sum(fine_amount, na.rm = TRUE)
+  )
+```
+
+## Collected revenue
+
+Less then the third of the total revenue was paid to the District.
+
+```{r}
+
+tickets_revenue_2024 |> 
+  summarise(
+    fines = sum(fine_amount, na.rm = TRUE),
+    paid = sum(total_paid, na.rm = TRUE),
+    payment_rate = (paid / fines) * 100
+  )
+```
+
+## Revenue trend in 2024
+
+## Top 5 camera generating revenue
+
+The analysis shows that the top cameras generating revenues on main avenues and freeways.
+
+```{r}
+
+#| message: false
+#| warning: false
+
+library(sf)
+
+ticket_points <- tickets_revenue_2024 |> 
+  filter(!is.na(longitude) & !is.na(latitude)) |> 
+  mutate(
+    longitude = as.numeric(longitude),
+    latitude = as.numeric(latitude)
+  ) |> 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+
+ticket_points_geo <- ticket_points |> 
+  st_join(
+    wards |> 
+      mutate(ward_num = as.character(WARD)) |> 
+      select(ward_num)
+  )
+
+top5_cameras_revenue_2024 <- ticket_points_geo |> 
+  st_drop_geometry() |> 
+  group_by(location, ward_num) |> 
+  summarise(
+    tickets_issued = n(),
+    total_fines = sum(fine_amount, na.rm = TRUE),
+    total_paid = sum(total_paid, na.rm = TRUE),
+    payment_rate = (total_paid / total_fines) * 100,
+    .groups = "drop"
+  ) |> 
+  arrange(desc(total_fines)) |> 
+  slice_head(n = 5) |> 
+  select(location, ward_num, tickets_issued, total_fines, total_paid, payment_rate)
+
+top5_cameras_revenue_2024
+```
+
+## Monthly revenue trend in 2024
+
+this line chart shows that the most months generating revenue are between April and July and go down in august. Although the trend go back up again in September but it doesn't reach the same levels as April- July.
+
+```{r}
+#| message: false
+#| warning: false
+
+revenue_trend <- tickets_revenue_2024 |> 
+  mutate(issue_date = as.Date(issue_date),
+         month = floor_date(issue_date, "month")) |> 
+  group_by(month) |> 
+  summarise(total_revenue = sum(total_paid, na.rm = TRUE))
+
+ggplot(revenue_trend, aes(x = month, y = total_revenue)) +
+  geom_line(color = "darkred", linewidth = 1) +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Traffic Ticket Revenue Trend 2024",
+    subtitle = "Monthly revenue collected from moving violations",
+    x = "Month",
+    y = "Revenue Collected in $",
+    caption = "Source: Open Data DC"
+  )
+```
+
